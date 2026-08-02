@@ -29,7 +29,7 @@ subroutine propagation(sl,sc,sr,u,v,h,g,snm,spec,dd,tsc,poro,hmin,mf)
 !        aa = mf*17.d0/(1.d0-poro)*(dsqrt(tt)-dsqrt(tsc))*cc**2.d0*((3.d0*dsqrt(tt)+dsqrt(tsc))/dsqrt(tt)*cf*dsqrt(dd/spec/g)*u**3.d0/h/vv   &
 !                         +(tt-tsc)*dsqrt(spec*g*dd**3.d0)*u*v**2.d0/h/(u**2.d0+v**2.d0)**1.5d0)
         aa = mf*17.d0/(1.d0-poro)*(dsqrt(tt)-dsqrt(tsc))*cc**2.d0*((3.d0*dsqrt(tt)+dsqrt(tsc))/dsqrt(tt)*cf*dsqrt(dd/spec/g)*u*(7.d0*u**2.d0+v**2.d0)/(6.d0*h*vv)   &
-                         +(tt-tsc)*dsqrt(spec*g*dd**3.d0)*u*v**2.d0/h/(u**2.d0+v**2.d0)**1.5d0)
+                        +(tt-tsc)*dsqrt(spec*g*dd**3.d0)*u*v**2.d0/h/(u**2.d0+v**2.d0)**1.5d0)
                          
         if( u>=0.d0 ) then
             sr = u+cc
@@ -45,7 +45,6 @@ subroutine propagation(sl,sc,sr,u,v,h,g,snm,spec,dd,tsc,poro,hmin,mf)
         sc = 0.d0
         sl = u-cc
     end if
-
 
 end subroutine
 
@@ -135,7 +134,7 @@ subroutine fluxcalx(ffx,ffy,qbx1,qbx2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
 
           ! calculation of fluxes at grid point
 
-!$omp do private(i,j,vv,tau,qbs)
+!$omp do private(i,j,vv,tau,qbs,qbn,dzdx,dzdy,dzdn)
         do j=0,ny
             do i=0,nx
                 if ( h(i,j)>hmin ) then
@@ -147,11 +146,16 @@ subroutine fluxcalx(ffx,ffy,qbx1,qbx2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
 
                     vv = dsqrt(u(i,j)**2.d0+v(i,j)**2.d0)
                     tau = snm**2.d0*vv**2.d0/(spec*diam*h(i,j)**(1.d0/3.d0))
+                    
+                    dzdx = (-z(i-1,j)+z(i+1,j))*rdx*0.5d0
+                    dzdy = (-z(i,j-1)+z(i,j+1))*rdy*0.5d0
+                    dzdn = (-v(i,j)*dzdx+u(i,j)*dzdy)/vv
 
                     if( tau>tsc .and. vv>1e-5 ) then
 !                        qbs = mf*4.d0*(tau-tsc)**1.5d0*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
                         qbs = mf*17.d0*(tau-tsc)*(dsqrt(tau)-dsqrt(tsc))*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
-                        qbx1(i,j) = u(i,j)/vv*qbs
+                        qbn = -qbs*dsqrt(tsc/tau)/mu_s*dzdn
+                        qbx1(i,j) = u(i,j)/vv*qbs-v(i,j)/vv*qbn
                     else
                         qbx1(i,j) = 0.d0
                     end if
@@ -211,7 +215,7 @@ subroutine fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
     integer :: i, j
     double precision :: vv, tau, qbs, qbn, dzdx, dzdy, dzdn, uc, vc, hc
         
-!$omp do private(i,j,vv,tau,qbs)
+!$omp do private(i,j,vv,tau,qbs,qbn,dzdx,dzdy,dzdn)
         do j=0,ny
             do i=0,nx
                 if ( h(i,j)>hmin ) then
@@ -223,11 +227,16 @@ subroutine fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
     
                     vv = dsqrt(u(i,j)**2.d0+v(i,j)**2.d0)
                     tau = snm**2.d0*vv**2.d0/(spec*diam*h(i,j)**(1.d0/3.d0))
+                    
+                    dzdx = (-z(i-1,j)+z(i+1,j))*rdx*0.5d0
+                    dzdy = (-z(i,j-1)+z(i,j+1))*rdy*0.5d0
+                    dzdn = (-v(i,j)*dzdx+u(i,j)*dzdy)/vv
 
                     if( tau>tsc .and. vv>1e-5 ) then
 !                        qbs = mf*4.d0*(tau-tsc)**1.5d0*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
                         qbs = mf*17.d0*(tau-tsc)*(dsqrt(tau)-dsqrt(tsc))*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
-                        qby1(i,j) = v(i,j)/vv*qbs
+                        qbn = -qbs*dsqrt(tsc/tau)/mu_s*dzdn
+                        qby1(i,j) = v(i,j)/vv*qbs+u(i,j)/vv*qbn
                     else
                         qby1(i,j) = 0.d0
                     end if
@@ -275,6 +284,10 @@ subroutine fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
         do i=0,nx
             qby1(i, 0) = -qby1(i,   1)
             qby1(i,ny) = -qby1(i,ny-1)
+!            qby2(i, 0) = 0.d0
+!            qby2(i,ny-1) = 0.d0
+!            qby1(i, 0) = 0.d0
+!            qby1(i,ny) = 0.d0
         end do
 
 end subroutine
@@ -530,6 +543,8 @@ subroutine waftvdqb(ff,fsta,fl,fr,sl,sc,sr,dql,dqc,dqr,ul,ur,dx,dt)
 
     if( sl>0.d0 .or. sr<0. ) then
         ff = fsta
+!    else if( sc==0.d0 ) then
+!        ff = 0.d0
     else
         ust = 0.5d0*(ul+ur)
 
@@ -690,9 +705,35 @@ subroutine tvdwafy(ff,fsta,f,dq,sl,sr,dy,dt,nx,ny)
     do i=1,nx-1
         j=0
         call waftvdflux(ff(i,j),fsta(i,j),f(i,j),f(i,j+1),sl(i,j),sr(i,j),dq(i,j),dq(i,j),dq(i,j+1),dy,dt)
+!        if( sl(i,j)>0.d0 .or. sr(i,j)<0. ) then
+!            ff(i,j) = fsta(i,j)
+!        else
+!            cl = sl(i,j)*dt/dy
+!            call phical(phi,cl,dq(i,j),dq(i,j),dq(i,j+1))
+!            ull = sign(1.d0,cl)*0.5d0*phi*(fsta(i,j)-f(i,j))
+            
+!            cr = sr(i,j)*dt/dy
+!            call phical(phi,cr,dq(i,j),dq(i,j),dq(i,j+1))
+!            urr = sign(1.d0,cr)*0.5d0*phi*(f(i,j+1)-fsta(i,j))
+
+!            ff(i,j) = 0.5d0*(f(i,j)+f(i,j+1))-ull-urr
+!        end if
 
         j=ny-1
         call waftvdflux(ff(i,j),fsta(i,j),f(i,j),f(i,j+1),sl(i,j),sr(i,j),dq(i,j-1),dq(i,j),dq(i,j),dy,dt)
+!        if( sl(i,j)>0.d0 .or. sr(i,j)<0. ) then
+!            ff(i,j) = fsta(i,j)
+!        else
+!            cl = sl(i,j)*dt/dy
+!            call phical(phi,cl,dq(i,j-1),dq(i,j),dq(i,j))
+!            ull = sign(1.d0,cl)*0.5d0*phi*(fsta(i,j)-f(i,j))
+            
+!            cr = sr(i,j)*dt/dy
+!            call phical(phi,cr,dq(i,j-1),dq(i,j),dq(i,j))
+!            urr = sign(1.d0,cr)*0.5d0*phi*(f(i,j+1)-fsta(i,j))
+
+!            ff(i,j) = 0.5d0*(f(i,j)+f(i,j+1))-ull-urr
+!        end if
     end do
 !$omp end single
 
@@ -858,6 +899,22 @@ subroutine systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx,qbtsc,u,v,sr,sc,sl,dz
             do i=1,nx-1
                 roughness = g*snm**2.d0*dsqrt(u(i,j)**2.d0+v(i,j)**2.d0)/wh(i,j)**(4.d0/3.d0)
 
+!                if( i==1 .or. i==nx-1 ) then
+!                    dzsl = wz(i,j)-wz(i-1,j)
+!                    dzsr = wz(i+1,j)-wz(i,j)
+!                else if( i==2 .or. i==nx-2 ) then
+!                    dzsl = (3.d0*wz(i,j)-4.d0*wz(i-1,j)+wz(i-2,j))*0.5d0
+!                    dzsr = (-3.d0*wz(i,j)+4.d0*wz(i+1,j)-wz(i+2,j))*0.5d0
+!                    dzsl = (2.d0*wz(i-2,j)-10.d0*wz(i-1,j)+9.d0*wz(i,j)-2.d0*wz(i+1,j)+wz(i+2,j))/6.d0
+!                    dzsr = (-wz(i-2,j)+2.d0*wz(i-1,j)-9.d0*wz(i,j)+10.d0*wz(i+1,j)-2.d0*wz(i+2,j))/6.d0
+!                else
+!                    dzsl = (-3.d0*wz(i+2,j)+30.d0*wz(i+1,j)+20.d0*wz(i,j)-60.d0*wz(i-1,j)+15.d0*wz(i-2,j)-2.d0*wz(i-3,j))/60.d0
+!                    dzsr = (2.d0*wz(i+3,j)-15.d0*wz(i+2,j)+60.d0*wz(i+1,j)-20.d0*wz(i,j)-30.d0*wz(i-1,j)+3.d0*wz(i-2,j))/60.d0
+!                end if
+                
+!                sigl = f2(i-1,j)-(sr(i-1,j))/(sr(i-1,j)-sl(i-1,j))*g*(wh(i,j)+wh(i-1,j))*0.5*dzsl
+!                sigr = f2(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i+1,j)+wh(i,j))*0.5*dzsr
+
                 sigl = f2(i-1,j)-(sr(i-1,j))/(sr(i-1,j)-sl(i-1,j))*g*(wh(i,j)+wh(i-1,j))*0.5*(wz(i,j)-wz(i-1,j))
                 sigr = f2(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i+1,j)+wh(i,j))*0.5*(wz(i+1,j)-wz(i,j))
         
@@ -879,17 +936,26 @@ subroutine systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx,qbtsc,u,v,sr,sc,sl,dz
 !$omp do private(i,j,wdz)
             do j=1,ny-1
                 do i=1,nx-1
-                    wdz = -((-f4(i-1,j)+f4(i,j))*rdx+(-qbx(i-1,j)+qbx(i,j))*rdx)*dt
+!                    wdz = -((-f4(i-1,j)+f4(i,j))*rdx+(-qbx(i-1,j)+qbx(i,j))*rdx)*dt
+                    wdz = -((-f4(i-1,j)+f4(i,j))*rdx)*dt
                     
                     if( i<0.95*nx ) then
-                        z(i,j) = wz(i,j)+wdz
-                        dz(i,j) = wdz
+                        z(i,j) = wz(i,j)+wdz    !/mf
+                        dz(i,j) = wdz   !/mf
                     else
                         z(i,j) = wz(i,j)
                         dz(i,j) = 0.d0
                     end if
                 end do
             end do
+!!$omp single
+!            do i=1,5
+!                do j=0,ny-1
+!                    write(*,'(a3,2i5,2e16.6)') 'x', i,j,f4(i,j),qbx(i,j)
+!                end do
+!                pause
+!            end do
+!!$omp end single
 
         else
 !$omp do private(i,j)
@@ -929,6 +995,22 @@ subroutine systemy(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qby,qbtsc,u,v,sr,sc,sl,dz
 
                 sigl = f3(i,j-1)-(sr(i,j-1))/(sr(i,j-1)-sl(i,j-1))*g*(wh(i,j)+wh(i,j-1))*0.5d0*(wz(i,j)-wz(i,j-1))
                 sigr = f3(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i,j+1)+wh(i,j))*0.5d0*(wz(i,j+1)-wz(i,j))
+                                
+!                if( j==1 .or. j==ny-1 ) then
+!                    dzsl = wz(i,j)-wz(i,j-1)
+!                    dzsr = wz(i,j+1)-wz(i,j)
+!                else if( j==2 .or. j==ny-2 ) then
+!                    dzsl = (3.d0*wz(i,j)-4.d0*wz(i,j-1)+wz(i,j-2))*0.5d0
+!                    dzsr = (-3.d0*wz(i,j)+4.d0*wz(i,j+1)-wz(i,j+2))*0.5d0
+!                    dzsl = (2.d0*wz(i,j-2)-10.d0*wz(i,j-1)+9.d0*wz(i,j)-2.d0*wz(i,j+1)+wz(i,j+2))/6.d0
+!                    dzsr = (-wz(i,j-2)+2.d0*wz(i,j-1)-9.d0*wz(i,j)+10.d0*wz(i,j+1)-2.d0*wz(i,j+2))/6.d0
+!                else
+!                    dzsl = (-3.d0*wz(i,j+2)+30.d0*wz(i,j+1)+20.d0*wz(i,j)-60.d0*wz(i,j-1)+15.d0*wz(i,j-2)-2.d0*wz(i,j-3))/60.d0
+!                    dzsr = (2.d0*wz(i,j+3)-15.d0*wz(i,j+2)+60.d0*wz(i,j+1)-20.d0*wz(i,j)-30.d0*wz(i,j-1)+3.d0*wz(i,j-2))/60.d0
+!                end if
+                
+!                sigl = f3(i,j-1)-(sr(i,j-1))/(sr(i,j-1)-sl(i,j-1))*g*(wh(i,j)+wh(i,j-1))*0.5d0*dzsl
+!                sigr = f3(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i,j+1)+wh(i,j))*0.5d0*dzsr
 
                 advection = (-sigl+sigr)*rdy
 
@@ -948,11 +1030,13 @@ subroutine systemy(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qby,qbtsc,u,v,sr,sc,sl,dz
 !$omp do private(i,j,wdz)
             do j=1,ny-1
                 do i=1,nx-1
-                    wdz = -((-f4(i,j-1)+f4(i,j))*rdy+(-qby(i,j-1)+qby(i,j))*rdy)*dt
+!                    wdz = -((-f4(i,j-1)+f4(i,j))*rdy+(-qby(i,j-1)+qby(i,j))*rdy)*dt
+                    wdz = -((-f4(i,j-1)+f4(i,j))*rdy)*dt
+!                    wdz = -((-qby(i,j-1)+qby(i,j))*rdy)*dt/(1.d0-poro)
 
                     if( i<0.95*nx ) then
-                        z(i,j) = wz(i,j)+wdz
-                        dz(i,j) = wdz
+                        z(i,j) = wz(i,j)+wdz    !/mf
+                        dz(i,j) = wdz   !/mf
                     else
                         z(i,j) = wz(i,j)
                         dz(i,j) = 0.d0
@@ -1173,12 +1257,12 @@ program SWE_HLL
     pi = 3.14159d0
     epsilon = 1e-9
 
-    dis     = 0.01035d0     ! water discharge (m3/s)
-!    dis = 0.0064
+!    dis     = 0.01035d0     ! water discharge (m3/s)
+    dis = 0.0064
     chlen   = 120.d0        ! channel length (m)
     wid     = 0.9d0         ! channel width (m)
-    ib      = 0.0125d0      ! bed slope
-!    ib      = 0.005d0      ! bed slope
+!    ib      = 0.0125d0      ! bed slope
+    ib      = 0.005d0      ! bed slope
     spec    = 1.65d0        ! specific weight of sediment in fluid
     diam    = 0.00076d0     ! sediment diameter (m)
     poro    = 0.4d0         ! porosity of bed
@@ -1189,23 +1273,23 @@ program SWE_HLL
     call CriticalShieldsIwagaki(diam,tsc,spec,nu,g)
     snm = (2.5d0*diam)**(1.d0/6.d0)/(7.66d0*dsqrt(g))
 
-    nx = 1500               ! number of grid point in downstream direction
-    ny = 18                 ! number of grid point in transverse direction
+    nx = 3000               ! number of grid point in downstream direction
+    ny = 36                 ! number of grid point in transverse direction
     dx = chlen/dble(nx)
 !    dy = wid/dble(ny)
     dy = wid/dble(ny-1)
     dt = 0.02d0
-    ct = 0.5d0             ! Courant number
+    ct = 0.95d0             ! Courant number
     ctm = ct*0.75d0
     
     rdx = 1.d0/dx
     rdy = 1.d0/dy
     
-    tuk   = 60.    !/mf             ! output time interval (sec)
+    tuk   = 600./mf             ! output time interval (sec)
     bedtime = 60.           ! start time for morphological change of bed
     etime = tuk*500.        ! end time of calculation
 
-    iomp = 4                ! number of cores for OpenMP parallelization
+    iomp = 8                ! number of cores for OpenMP parallelization
 
         ! allocation of arrays
 
@@ -1252,6 +1336,18 @@ program SWE_HLL
         end do
     end do
 
+!    do j=0,0.4*ny
+!        do i=0.1*nx,0.12*nx
+!            z(i,j) = z(i,j)+h(i,j)*0.5
+!        end do
+!    end do
+    
+!    do j=0.6*ny,ny
+!        do i=0.5*nx,0.52*nx
+!            z(i,j) = z(i,j)+h(i,j)*0.5
+!        end do
+!    end do
+
     call boundary(h,qx,qy,z,dz,dis,wid,snm,ib,dy,nx,ny)
 
     do j=0,ny
@@ -1290,14 +1386,14 @@ program SWE_HLL
 !$omp do private(i,j)
         do j=0,ny
             do i=0,nx
-                h(i,j) = wh(i,j)
-                z(i,j) = wz(i,j)
-                qx(i,j) = wqx(i,j)
-                qy(i,j) = wqy(i,j)
+                wh(i,j) = h(i,j)
+                wz(i,j) = z(i,j)
+                wqx(i,j) = qx(i,j)
+                wqy(i,j) = qy(i,j)
             end do
         end do
 
-            !  x direction 
+            !  x direction for dt/2
 
         call fluxcalx(ffx,ffy,qbx1,qbx2,u,v,wh,wz,wqx,wqy,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
 
@@ -1308,7 +1404,9 @@ program SWE_HLL
             do i=0,nx-1
                 call propagation(wsl1, wsc1, wsr1,u(i,j),v(i,j),wh(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
                 call propagation(wsl2, wsc2, wsr2,u(i+1,j),v(i+1,j),wh(i+1,j),g,snm,spec,diam,tsc,poro,hmin,mf)
-
+!                sl(i,j) = wsl1
+!                sr(i,j) = wsr2
+!                sc(i,j) = (wsc1+wsc2)*0.5d0
                 sl(i,j) = min(wsl1,wsl2)
                 sr(i,j) = max(wsr1,wsr2)
                 
@@ -1318,6 +1416,11 @@ program SWE_HLL
                     sc(i,j) = wsc2
                 end if
 
+!                uc = (u(i,j)+u(i+1,j))*0.5d0
+!                vc = (v(i,j)+v(i+1,j))*0.5d0
+!                hc = (wh(i,j)+wh(i+1,j))*0.5d0
+
+!                call propagation(sl(i,j),sc(i,j),sr(i,j),uc,vc,hc,g,snm,spec,diam,tsc,poro,hmin,mf)
             end do
         end do
 
@@ -1325,6 +1428,7 @@ program SWE_HLL
         dt1 = 999.d0
         do j=1,ny-1
             do i=0,nx-1
+!                dt1 = min(dabs(dx/sl(i,j)), dabs(dx/sc(i,j)), dabs(dx/sr(i,j)),dt1)
                 dt1 = min(dabs(dx/sl(i,j)), dabs(dx/sr(i,j)),dt1)
             end do
         end do
@@ -1339,20 +1443,20 @@ program SWE_HLL
 
             ! TVD WAF solver for estimating fluxes at i+1/2
 
-        call tvdwafx(f1,qsta,wqx,dh,sl,sr,dx,dt,nx,ny)
-        call tvdwafx(f2,fsta,ffx,dh,sl,sr,dx,dt,nx,ny)
+        call tvdwafx(f1,qsta,wqx,dh,sl,sr,dx,dt*0.5d0,nx,ny)
+        call tvdwafx(f2,fsta,ffx,dh,sl,sr,dx,dt*0.5d0,nx,ny)
 
-        call tvdwafx_qy(f3,wqy,wh,f1,dx,dt,nx,ny,hmin,epsilon)
+        call tvdwafx_qy(f3,wqy,wh,f1,dx,dt*0.5d0,nx,ny,hmin,epsilon)
 
         call hllzx1storder(qbsta,qbx1,sl,sc,sr,wz,u,v,snm,dx,wqx,wh,nx,ny)
 
         call dqxcal(dh,wz,epsilon,nx,ny)
 
-        call tvdwafxz(f4,qbsta,qbx1,wz,dh,sl,sc,sr,u,v,wh,dx,dt,g,nx,ny)
+        call tvdwafxz(f4,qbsta,qbx1,wz,dh,sl,sc,sr,u,v,wh,dx,dt*0.5d0,g,nx,ny)
 
             !  solve splitted system equation for x direction
 
-        call systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx2,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt,nx,ny)
+        call systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx2,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt*0.5d0,nx,ny)
 
         call boundary(h,qx,qy,z,dz,dis,wid,snm,ib,dy,nx,ny)
 
@@ -1365,7 +1469,9 @@ program SWE_HLL
             do i=1,nx-1
                 call propagation(wsl1, wsc1, wsr1,v(i,j),u(i,j),h(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
                 call propagation(wsl2, wsc2, wsr2,v(i,j+1),u(i,j+1),h(i,j+1),g,snm,spec,diam,tsc,poro,hmin,mf)
-
+!                sl(i,j) = wsl1
+!                sr(i,j) = wsr2
+!                sc(i,j) = (wsc1+wsc2)*0.5d0
                 sl(i,j) = min(wsl1,wsl2)
                 sr(i,j) = max(wsr1,wsr2)
                 
@@ -1374,6 +1480,13 @@ program SWE_HLL
                 else
                     sc(i,j) = wsc2
                 end if
+
+!                uc = (u(i,j+1)+u(i,j))*0.5d0
+!                vc = (v(i,j+1)+v(i,j))*0.5d0
+!                hc = (h(i,j+1)+h(i,j))*0.5d0
+
+!                call propagation(sl(i,j),sc(i,j),sr(i,j),vc,uc,hc,g,snm,spec,diam,tsc,poro,hmin,mf)
+
             end do
         end do
 
@@ -1381,6 +1494,7 @@ program SWE_HLL
         dt2 = 999.d0
         do j=0,ny-1
             do i=1,nx-1
+!                dt2 = min(dabs(dy/sl(i,j)), dabs(dy/sc(i,j)), dabs(dy/sr(i,j)),dt2)
                 dt2 = min(dabs(dy/sl(i,j)), dabs(dy/sr(i,j)),dt2)
             end do
         end do
@@ -1413,6 +1527,74 @@ program SWE_HLL
         call systemy(wh,h,wqx,qx,wqy,qy,wz,z,f1,f2,f3,f4,qby2,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt,nx,ny)
 
         call boundary(wh,wqx,wqy,wz,dz,dis,wid,snm,ib,dy,nx,ny)
+
+        
+            !  x direction for dt/2
+
+        call fluxcalx(ffx,ffy,qbx1,qbx2,u,v,wh,wz,wqx,wqy,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
+
+            ! wave speed calculation at i+1/2
+
+!$omp do private(i,j,wsl1,wsc1,wsr1,wsl2,wsc2,wsr2,uc,vc,hc)
+        do j=1,ny-1
+            do i=0,nx-1
+                call propagation(wsl1, wsc1, wsr1,u(i,j),v(i,j),wh(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
+                call propagation(wsl2, wsc2, wsr2,u(i+1,j),v(i+1,j),wh(i+1,j),g,snm,spec,diam,tsc,poro,hmin,mf)
+!                sl(i,j) = wsl1
+!                sr(i,j) = wsr2
+!                sc(i,j) = (wsc1+wsc2)*0.5d0
+                sl(i,j) = min(wsl1,wsl2)
+                sr(i,j) = max(wsr1,wsr2)
+                
+                if( dabs(wsc1)>dabs(wsc2) ) then
+                    sc(i,j) = wsc1
+                else
+                    sc(i,j) = wsc2
+                end if
+
+!                uc = (u(i,j)+u(i+1,j))*0.5d0
+!                vc = (v(i,j)+v(i+1,j))*0.5d0
+!                hc = (wh(i,j)+wh(i+1,j))*0.5d0
+
+!                call propagation(sl(i,j),sc(i,j),sr(i,j),uc,vc,hc,g,snm,spec,diam,tsc,poro,hmin,mf)
+            end do
+        end do
+
+!$omp single
+        dt1 = 999.d0
+        do j=1,ny-1
+            do i=0,nx-1
+!                dt1 = min(dabs(dx/sl(i,j)), dabs(dx/sc(i,j)), dabs(dx/sr(i,j)),dt1)
+                dt1 = min(dabs(dx/sl(i,j)), dabs(dx/sr(i,j)),dt1)
+            end do
+        end do
+!$omp end single
+
+            !  HLL solver for estimating flux at star region
+
+        call hllx1storder(qsta,wqx,sl,sr,wh,nx,ny)
+        call hllx1storder(fsta,ffx,sl,sr,wqx,nx,ny)
+
+        call dqxcal(dh,wh,epsilon,nx,ny)
+
+            ! TVD WAF solver for estimating fluxes at i+1/2
+
+        call tvdwafx(f1,qsta,wqx,dh,sl,sr,dx,dt*0.5d0,nx,ny)
+        call tvdwafx(f2,fsta,ffx,dh,sl,sr,dx,dt*0.5d0,nx,ny)
+
+        call tvdwafx_qy(f3,wqy,wh,f1,dx,dt*0.5d0,nx,ny,hmin,epsilon)
+
+        call hllzx1storder(qbsta,qbx1,sl,sc,sr,wz,u,v,snm,dx,wqx,wh,nx,ny)
+
+        call dqxcal(dh,wz,epsilon,nx,ny)
+
+        call tvdwafxz(f4,qbsta,qbx1,wz,dh,sl,sc,sr,u,v,wh,dx,dt*0.5d0,g,nx,ny)
+
+            !  solve splitted system equation for x direction
+
+        call systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx2,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt*0.5d0,nx,ny)
+
+        call boundary(h,qx,qy,z,dz,dis,wid,snm,ib,dy,nx,ny)
 
 !$omp single
         dt = min(dt1,dt2)*ct
