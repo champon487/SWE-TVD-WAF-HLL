@@ -10,7 +10,7 @@ subroutine propagation(sl,sc,sr,u,v,h,g,snm,spec,dd,tsc,poro,hmin,mf)
     cc = dsqrt(g*h)
     vv = dsqrt(u**2.d0+v**2.d0)
 
-    if( vv>1e-5 .and. h>hmin ) then
+    if( vv>1e-5 .and. h/dd>2.5d0 ) then
         cf = g*snm**2.d0/h**(1.d0/3.d0)
         tt = cf*vv**2.d0/(spec*g*dd)                    ! Shields number
     else
@@ -48,6 +48,140 @@ subroutine propagation(sl,sc,sr,u,v,h,g,snm,spec,dd,tsc,poro,hmin,mf)
 
 
 end subroutine
+
+subroutine wavespeedx(sl,sc,sr,wsl,wsc,wsr,obs,h,hmin,nx,ny)
+    implicit none
+    integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
+    double precision, intent(in) :: hmin
+    double precision,  dimension(0:nx,0:ny), intent(in)  :: h, wsl, wsc, wsr
+    double precision,  dimension(0:nx,0:ny), intent(out) :: sl, sc, sr
+
+    integer :: i, j
+    double precision :: wsl1, wsc1, wsr1, wsl2, wsc2, wsr2
+
+!$omp do private(i,j,wsl1,wsc1,wsr1,wsl2,wsc2,wsr2)
+        do j=1,ny-1
+            do i=0,nx-1
+                wsl1 = wsl(i,j)
+                wsc1 = wsc(i,j)
+                wsr1 = wsr(i,j)
+                wsl2 = wsl(i+1,j)
+                wsc2 = wsc(i+1,j)
+                wsr2 = wsr(i+1,j)
+
+                if( obs(i,j)==0 .and. obs(i+1,j)==0 ) then
+
+                    sl(i,j) = min(wsl1,wsl2)
+                    sr(i,j) = max(wsr1,wsr2)
+                    
+                    if( dabs(wsc1)>dabs(wsc2) ) then
+                        sc(i,j) = wsc1
+                    else
+                        sc(i,j) = wsc2
+                    end if
+
+                else if( obs(i,j)==0 .and. obs(i+1,j)==1 ) then
+                    sl(i,j) = wsl1
+                    sr(i,j) = wsr1
+                    sc(i,j) = wsc1
+                else if( obs(i,j)==1 .and. obs(i+1,j)==0 ) then
+                    sl(i,j) = wsl2
+                    sr(i,j) = wsr2
+                    sc(i,j) = wsc2
+                else
+                    sl(i,j) = min(wsl1,wsl2)
+                    sr(i,j) = max(wsr1,wsr2)
+                    
+                    if( dabs(wsc1)>dabs(wsc2) ) then
+                        sc(i,j) = wsc1
+                    else
+                        sc(i,j) = wsc2
+                    end if
+                end if
+                
+                if( h(i,j)<=hmin .and. h(i+1,j)>hmin ) then
+                    sl(i,j) = wsl2
+                    sr(i,j) = wsr2
+                    sc(i,j) = wsc2
+                else if( h(i+1,j)<=hmin .and. h(i,j)>hmin ) then
+                    sl(i,j) = wsl1
+                    sr(i,j) = wsr1
+                    sc(i,j) = wsc1
+                end if
+
+            end do
+        end do
+
+end subroutine
+
+subroutine wavespeedy(sl,sc,sr,wsl,wsc,wsr,obs,h,hmin,nx,ny)
+    implicit none
+    integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
+    double precision, intent(in) :: hmin
+    double precision,  dimension(0:nx,0:ny), intent(in)  :: h, wsl, wsc, wsr
+    double precision,  dimension(0:nx,0:ny), intent(out) :: sl, sc, sr
+
+    integer :: i, j
+    double precision :: wsl1, wsc1, wsr1, wsl2, wsc2, wsr2
+
+!$omp do private(i,j,wsl1,wsc1,wsr1,wsl2,wsc2,wsr2)
+        do j=0,ny-1
+            do i=1,nx-1
+                
+                wsl1 = wsl(i,j)
+                wsc1 = wsc(i,j)
+                wsr1 = wsr(i,j)
+                wsl2 = wsl(i,j+1)
+                wsc2 = wsc(i,j+1)
+                wsr2 = wsr(i,j+1)
+
+                if( obs(i,j)==0 .and. obs(i,j+1)==0 ) then
+
+                    sl(i,j) = min(wsl1,wsl2)
+                    sr(i,j) = max(wsr1,wsr2)
+                    
+                    if( dabs(wsc1)>dabs(wsc2) ) then
+                        sc(i,j) = wsc1
+                    else
+                        sc(i,j) = wsc2
+                    end if
+
+                else if( obs(i,j)==0 .and. obs(i,j+1)==1 ) then
+                    sl(i,j) = wsl1
+                    sr(i,j) = wsr1
+                    sc(i,j) = wsc1
+                else if( obs(i,j)==1 .and. obs(i,j+1)==0 ) then
+                    sl(i,j) = wsl2
+                    sr(i,j) = wsr2
+                    sc(i,j) = wsc2
+                else
+                    sl(i,j) = min(wsl1,wsl2)
+                    sr(i,j) = max(wsr1,wsr2)
+                    
+                    if( dabs(wsc1)>dabs(wsc2) ) then
+                        sc(i,j) = wsc1
+                    else
+                        sc(i,j) = wsc2
+                    end if
+                end if
+
+                if( h(i,j)<=hmin .and. h(i,j+1)>hmin ) then
+                    sl(i,j) = wsl2
+                    sr(i,j) = wsr2
+                    sc(i,j) = wsc2
+                else if( h(i,j+1)<=hmin .and. h(i,j)>hmin ) then
+                    sl(i,j) = wsl1
+                    sr(i,j) = wsr1
+                    sc(i,j) = wsc1
+                end if
+
+            end do
+        end do
+
+end subroutine
+
 
  ! flux limiter for TVD
 
@@ -123,11 +257,12 @@ subroutine phical(phi,c,dql,dqc,dqr)
 
 end subroutine
 
-subroutine fluxcalx(ffx,ffy,qbx1,qbx2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
+subroutine fluxcalx(ffx,ffy,qbx1,qbx2,u,v,h,z,qx,qy,obs,slx,scx,srx,sly,scy,sry,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
     implicit none
     integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
     double precision, intent(in) :: snm, spec, diam, mu_s, mf, tsc, hmin, g, rdx, rdy, poro
-    double precision, dimension(0:nx,0:ny), intent(in) :: h, z, qx, qy
+    double precision, dimension(0:nx,0:ny), intent(in) :: h, z, qx, qy, slx, scx, srx, sly, scy, sry
     double precision, dimension(0:nx,0:ny), intent(out) :: ffx, ffy, qbx1, qbx2, u, v
 
     integer :: i,j
@@ -148,11 +283,44 @@ subroutine fluxcalx(ffx,ffy,qbx1,qbx2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
                 vv = dsqrt(u(i,j)**2.d0+v(i,j)**2.d0)
                 tau = snm**2.d0*vv**2.d0/(spec*diam*h(i,j)**(1.d0/3.d0))
                 
-                dzdx = (-z(i-1,j)+z(i+1,j))*rdx*0.5d0
-                dzdy = (-z(i,j-1)+z(i,j+1))*rdy*0.5d0
+                if( i==0 ) then
+                    dzdx = (-z(i,j)+z(i+1,j))*rdx
+                else if( obs(i-1,j)==1 .and. obs(i,j)==0 ) then
+                    dzdx = (-z(i,j)+z(i+1,j))*rdx
+                else if( i==nx ) then
+                    dzdx = (-z(i-1,j)+z(i,j))*rdx
+                else if( obs(i,j)==0 .and. obs(i+1,j)==1 ) then
+                    dzdx = (-z(i-1,j)+z(i,j))*rdx
+                else
+                    if( scx(i,j)>0.d0 ) then
+                        dzdx = (-slx(i,j)*(-z(i-1,j)+z(i,j))+scx(i,j)*(-z(i,j)+z(i+1,j)))*rdx/(scx(i,j)-slx(i,j))
+                    else
+                        dzdx = (-scx(i,j)*(-z(i-1,j)+z(i,j))+srx(i,j)*(-z(i,j)+z(i+1,j)))*rdx/(srx(i,j)-scx(i,j))
+                    end if
+
+                end if
+
+                if( j==0 ) then
+                    dzdy = (-z(i,j)+z(i,j+1))*rdy
+                else if( obs(i,j-1)==1 .and. obs(i,j)==0 ) then
+                    dzdy = (-z(i,j)+z(i,j+1))*rdy
+                else if( j==ny ) then
+                    dzdy = (-z(i,j-1)+z(i,j))*rdy
+                else if( obs(i,j)==0 .and. obs(i,j+1)==1 ) then
+                    dzdy = (-z(i,j-1)+z(i,j))*rdy
+                else
+                    if( scy(i,j)>0.d0 ) then
+                        dzdy = (-sly(i,j)*(-z(i,j-1)+z(i,j))+scy(i,j)*(-z(i,j)+z(i,j+1)))*rdy/(scy(i,j)-sly(i,j))
+                    else
+                        dzdy = (-scy(i,j)*(-z(i,j-1)+z(i,j))+sry(i,j)*(-z(i,j)+z(i,j+1)))*rdy/(sry(i,j)-scy(i,j))
+                    end if
+                end if
+
+!                dzdx = (-z(i-1,j)+z(i+1,j))*rdx*0.5d0
+!                dzdy = (-z(i,j-1)+z(i,j+1))*rdy*0.5d0
                 dzdn = (-v(i,j)*dzdx+u(i,j)*dzdy)/vv
 
-                if( tau>tsc .and. vv>1e-5 ) then
+                if( tau>tsc .and. vv>1e-5 .and. h(i,j)/diam>2.5d0 ) then
 !                        qbs = mf*4.d0*(tau-tsc)**1.5d0*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
                     qbs = mf*17.d0*(tau-tsc)*(dsqrt(tau)-dsqrt(tsc))*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
                     qbn = -qbs*dsqrt(tsc/tau)/mu_s*dzdn
@@ -206,11 +374,12 @@ subroutine fluxcalx(ffx,ffy,qbx1,qbx2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
 
 end subroutine
 
-subroutine fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
+subroutine fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,obs,slx,scx,srx,sly,scy,sry,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
     implicit none
     integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
     double precision, intent(in) :: snm, spec, diam, mu_s, mf, tsc, hmin, g, rdx, rdy, poro
-    double precision, dimension(0:nx,0:ny), intent(in) :: h, z, qx, qy
+    double precision, dimension(0:nx,0:ny), intent(in) :: h, z, qx, qy, slx, scx, srx, sly, scy, sry
     double precision, dimension(0:nx,0:ny), intent(out) :: ffx, ffy, qby1, qby2, u, v
 
     integer :: i, j
@@ -229,12 +398,44 @@ subroutine fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,
 
                 vv = dsqrt(u(i,j)**2.d0+v(i,j)**2.d0)
                 tau = snm**2.d0*vv**2.d0/(spec*diam*h(i,j)**(1.d0/3.d0))
-                
-                dzdx = (-z(i-1,j)+z(i+1,j))*rdx*0.5d0
-                dzdy = (-z(i,j-1)+z(i,j+1))*rdy*0.5d0
+
+                if( i==0 ) then
+                    dzdx = (-z(i,j)+z(i+1,j))*rdx
+                else if( obs(i-1,j)==1 .and. obs(i,j)==0 ) then
+                    dzdx = (-z(i,j)+z(i+1,j))*rdx
+                else if( i==nx ) then
+                    dzdx = (-z(i-1,j)+z(i,j))*rdx
+                else if( obs(i,j)==0 .and. obs(i+1,j)==1 ) then
+                    dzdx = (-z(i-1,j)+z(i,j))*rdx
+                else
+                    if( scx(i,j)>0.d0 ) then
+                        dzdx = (-slx(i,j)*(-z(i-1,j)+z(i,j))+scx(i,j)*(-z(i,j)+z(i+1,j)))*rdx/(scx(i,j)-slx(i,j))
+                    else
+                        dzdx = (-scx(i,j)*(-z(i-1,j)+z(i,j))+srx(i,j)*(-z(i,j)+z(i+1,j)))*rdx/(srx(i,j)-scx(i,j))
+                    end if
+                end if
+
+                if( j==0 ) then
+                    dzdy = (-z(i,j)+z(i,j+1))*rdy
+                else if( obs(i,j-1)==1 .and. obs(i,j)==0 ) then
+                    dzdy = (-z(i,j)+z(i,j+1))*rdy
+                else if( j==ny ) then
+                    dzdy = (-z(i,j-1)+z(i,j))*rdy
+                else if( obs(i,j)==0 .and. obs(i,j+1)==1 ) then
+                    dzdy = (-z(i,j-1)+z(i,j))*rdy
+                else
+                    if( scy(i,j)>0.d0 ) then
+                        dzdy = (-sly(i,j)*(-z(i,j-1)+z(i,j))+scy(i,j)*(-z(i,j)+z(i,j+1)))*rdy/(scy(i,j)-sly(i,j))
+                    else
+                        dzdy = (-scy(i,j)*(-z(i,j-1)+z(i,j))+sry(i,j)*(-z(i,j)+z(i,j+1)))*rdy/(sry(i,j)-scy(i,j))
+                    end if
+                end if
+
+!                dzdx = (-z(i-1,j)+z(i+1,j))*rdx*0.5d0
+!                dzdy = (-z(i,j-1)+z(i,j+1))*rdy*0.5d0
                 dzdn = (-v(i,j)*dzdx+u(i,j)*dzdy)/vv
 
-                if( tau>tsc .and. vv>1e-5 ) then
+                if( tau>tsc .and. vv>1e-5 .and. h(i,j)/diam>2.5d0 ) then
 !                        qbs = mf*4.d0*(tau-tsc)**1.5d0*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
                     qbs = mf*17.d0*(tau-tsc)*(dsqrt(tau)-dsqrt(tsc))*dsqrt(spec*g*diam**3.d0)/(1.d0-poro)
                     qbn = -qbs*dsqrt(tsc/tau)/mu_s*dzdn
@@ -317,45 +518,6 @@ subroutine hllx1storder(f,ff,sl,sr,u,nx,ny)
 
 end subroutine
 
-subroutine hllxz1storder(f,ff,sl,sc,sr,u,q,nx,ny)
-    implicit none
-    integer, intent(in) :: nx, ny
-    double precision, dimension(0:nx,0:ny), intent(in)  :: ff, sl, sc, sr, u, q
-    double precision, dimension(0:nx,0:ny), intent(out) :: f
-
-    integer :: i, j
-    double precision :: cl, cr, ust
-
-!$omp do private(i,j,ust,cl,cr)
-    do j=1,ny-1
-        do i=0,nx-1
-            if( sl(i,j)>0.d0 ) then
-                f(i,j) = ff(i,j)
-            else if( sr(i,j)<0.d0 ) then
-                f(i,j) = ff(i+1,j)
-            else
-                ust = (u(i,j)+u(i+1,j))*0.5d0
-
-                if( dabs(ust)<1e-5 ) then
-                    f(i,j) = 0.d0
-                else 
-                    if (ust>1e-5 ) then
-                        cl = sl(i,j) 
-                        cr = sc(i,j)
-                    else
-                        cl = sc(i,j) 
-                        cr = sr(i,j)
-                    end if
-
-                    f(i,j) = (ff(i,j)*cr-ff(i+1,j)*cl+cr*cl*(q(i+1,j)-q(i,j)))/(cr-cl)
-                end if
-
-            end if
-        end do
-    end do
-
-end subroutine
-
  ! HLL solver for Exner equation in x-direction
 
 subroutine hllzx1storder(f,ff,sl,sc,sr,z,u,v,snm,dx,qx,h,nx,ny)
@@ -421,45 +583,6 @@ subroutine hlly1storder(f,ff,sl,sr,u,nx,ny)
                 f(i,j) = ff(i,j+1)
             else
                 f(i,j) = (ff(i,j)*sr(i,j)-ff(i,j+1)*sl(i,j)+sr(i,j)*sl(i,j)*(u(i,j+1)-u(i,j)))/(sr(i,j)-sl(i,j))
-            end if
-        end do
-    end do
-
-end subroutine
-
-subroutine hllyz1storder(f,ff,sl,sc,sr,u,q,nx,ny)
-    implicit none
-    integer, intent(in) :: nx, ny
-    double precision, dimension(0:nx,0:ny), intent(in)  :: ff, sl, sc, sr, u, q
-    double precision, dimension(0:nx,0:ny), intent(out) :: f
-
-    integer :: i, j
-    double precision :: cl, cr, ust
-
-!$omp do private(i,j,ust,cl,cr)
-    do j=0,ny-1
-        do i=1,nx-1
-            if( sl(i,j)>0.d0 ) then
-                f(i,j) = ff(i,j)
-            else if( sr(i,j)<0.d0 ) then
-                f(i,j) = ff(i,j+1)
-            else
-                ust = (u(i,j)+u(i,j+1))*0.5d0
-
-                if( dabs(ust)<1e-5 ) then
-                    f(i,j) = 0.d0
-                else 
-                    if (ust>1e-5 ) then
-                        cl = sl(i,j) 
-                        cr = sc(i,j)
-                    else
-                        cl = sc(i,j) 
-                        cr = sr(i,j)
-                    end if
-
-                    f(i,j) = (ff(i,j)*cr-ff(i,j+1)*cl+cr*cl*(q(i,j+1)-q(i,j)))/(cr-cl)
-                end if
-
             end if
         end do
     end do
@@ -845,9 +968,10 @@ subroutine dqycal(dh,q,epsilon,nx,ny)
 
 end subroutine
 
-subroutine systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,time,bedtime,rdx,rdy,dt,nx,ny)
+subroutine systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx,qbtsc,u,v,sr,sc,sl,dz,obs,snm,g,poro,hmin,mf,time,bedtime,rdx,rdy,dt,nx,ny)
     implicit none
     integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
     double precision, intent(in) :: snm, g, poro, hmin, mf, time, bedtime, rdx, rdy, dt
     double precision, dimension(0:nx,0:ny), intent(in) :: wh, wqx, wqy, wz, f1, f2, f3, f4, qbx, u, v, sr, sc, sl, qbtsc
     double precision, dimension(0:nx,0:ny), intent(out) :: h, qx, qy, z, dz
@@ -869,8 +993,16 @@ subroutine systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx,qbtsc,u,v,sr,sc,sl,dz
             do i=1,nx-1
                 roughness = g*snm**2.d0*dsqrt(u(i,j)**2.d0+v(i,j)**2.d0)/wh(i,j)**(4.d0/3.d0)
 
-                sigl = f2(i-1,j)-(sr(i-1,j))/(sr(i-1,j)-sl(i-1,j))*g*(wh(i,j)+wh(i-1,j))*0.5*(wz(i,j)-wz(i-1,j))
-                sigr = f2(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i+1,j)+wh(i,j))*0.5*(wz(i+1,j)-wz(i,j))
+                if( obs(i-1,j)==1 .and. obs(i,j)==0 ) then
+                    sigl = f2(i-1,j)
+                    sigr = f2(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i+1,j)+wh(i,j))*0.5*(wz(i+1,j)-wz(i,j))
+                else if( obs(i,j)==0 .and. obs(i+1,j)==1 ) then
+                    sigl = f2(i-1,j)-(sr(i-1,j))/(sr(i-1,j)-sl(i-1,j))*g*(wh(i,j)+wh(i-1,j))*0.5*(wz(i,j)-wz(i-1,j))
+                    sigr = f2(i,j)
+                else
+                    sigl = f2(i-1,j)-(sr(i-1,j))/(sr(i-1,j)-sl(i-1,j))*g*(wh(i,j)+wh(i-1,j))*0.5*(wz(i,j)-wz(i-1,j))
+                    sigr = f2(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i+1,j)+wh(i,j))*0.5*(wz(i+1,j)-wz(i,j))
+                end if
         
                 advection = (-sigl+sigr)*rdx
 
@@ -893,7 +1025,8 @@ subroutine systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx,qbtsc,u,v,sr,sc,sl,dz
 !                    wdz = -((-f4(i-1,j)+f4(i,j))*rdx+(-qbx(i-1,j)+qbx(i,j))*rdx)*dt
                     wdz = -((-f4(i-1,j)+f4(i,j))*rdx)*dt
                     
-                    if( i<0.95*nx ) then
+!                    if( i<0.95*nx ) then
+                    if( i<nx ) then
                         z(i,j) = wz(i,j)+wdz
                         dz(i,j) = wdz
                     else
@@ -915,9 +1048,10 @@ subroutine systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx,qbtsc,u,v,sr,sc,sl,dz
 
 end subroutine
 
-subroutine systemy(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qby,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,time,bedtime,rdx,rdy,dt,nx,ny)
+subroutine systemy(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qby,qbtsc,u,v,sr,sc,sl,dz,obs,snm,g,poro,hmin,mf,time,bedtime,rdx,rdy,dt,nx,ny)
     implicit none
     integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
     double precision, intent(in) :: snm, g, poro, hmin, mf, time, bedtime, rdx, rdy, dt
     double precision, dimension(0:nx,0:ny), intent(in) :: wh, wqx, wqy, wz, f1, f2, f3, f4, qby, u, v, sr, sc, sl, qbtsc
     double precision, dimension(0:nx,0:ny), intent(out) :: h, qx, qy, z, dz
@@ -939,8 +1073,16 @@ subroutine systemy(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qby,qbtsc,u,v,sr,sc,sl,dz
             do i=1,nx-1
                 roughness = g*snm**2.d0*dsqrt(u(i,j)**2.d0+v(i,j)**2.d0)/wh(i,j)**(4.d0/3.d0)
 
-                sigl = f3(i,j-1)-(sr(i,j-1))/(sr(i,j-1)-sl(i,j-1))*g*(wh(i,j)+wh(i,j-1))*0.5d0*(wz(i,j)-wz(i,j-1))
-                sigr = f3(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i,j+1)+wh(i,j))*0.5d0*(wz(i,j+1)-wz(i,j))
+                if( obs(i,j-1)==1 .and. obs(i,j)==0 ) then
+                    sigl = f3(i,j-1)
+                    sigr = f3(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i,j+1)+wh(i,j))*0.5d0*(wz(i,j+1)-wz(i,j))
+                else if( obs(i,j)==0 .and. obs(i,j+1)==1 ) then
+                    sigl = f3(i,j-1)-(sr(i,j-1))/(sr(i,j-1)-sl(i,j-1))*g*(wh(i,j)+wh(i,j-1))*0.5d0*(wz(i,j)-wz(i,j-1))
+                    sigr = f3(i,j)
+                else
+                    sigl = f3(i,j-1)-(sr(i,j-1))/(sr(i,j-1)-sl(i,j-1))*g*(wh(i,j)+wh(i,j-1))*0.5d0*(wz(i,j)-wz(i,j-1))
+                    sigr = f3(i,j)-(sl(i,j))/(sr(i,j)-sl(i,j))*g*(wh(i,j+1)+wh(i,j))*0.5d0*(wz(i,j+1)-wz(i,j))
+                end if
 
                 advection = (-sigl+sigr)*rdy
 
@@ -963,7 +1105,8 @@ subroutine systemy(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qby,qbtsc,u,v,sr,sc,sl,dz
 !                    wdz = -((-f4(i,j-1)+f4(i,j))*rdy+(-qby(i,j-1)+qby(i,j))*rdy)*dt
                     wdz = -((-f4(i,j-1)+f4(i,j))*rdy)*dt
 
-                    if( i<0.95*nx ) then
+!                    if( i<0.95*nx ) then
+                    if( i<nx ) then
                         z(i,j) = wz(i,j)+wdz
                         dz(i,j) = wdz
                     else
@@ -984,6 +1127,94 @@ subroutine systemy(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qby,qbtsc,u,v,sr,sc,sl,dz
             end do
 
         end if
+
+end subroutine
+
+subroutine obstaclex(f1,f2,f3,f4,obs,h,hmin,g,nx,ny)
+    implicit none
+    integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
+    double precision, intent(in) :: g, hmin
+    double precision, dimension(0:nx,0:ny), intent(in) :: h
+    double precision, dimension(0:nx,0:ny), intent(inout) :: f1, f2, f3, f4
+
+    integer :: i, j
+
+!$omp do
+        do j=0,ny
+            do i=1,nx-1
+!                if( obs(i,j)==0 .and. obs(i+1,j)==1 .and. wh(i,j)>hmin ) then
+                if( obs(i,j)==0 .and. obs(i+1,j)==1 ) then
+                    f1(i,j) = 0.d0
+                    if( h(i,j)>hmin ) then
+                        f2(i,j) = 0.5d0*g*h(i,j)**2.d0
+                    else
+                        f2(i,j) = 0.d0
+                    end if
+                    f3(i,j) = 0.d0
+                    f4(i,j) = 0.d0
+!                else if ( obs(i,j)==1 .and. obs(i+1,j)==0 .and. wh(i+1,j)>hmin ) then
+                else if ( obs(i,j)==1 .and. obs(i+1,j)==0 ) then
+                    f1(i,j) = 0.d0
+                    if( h(i+1,j)>hmin ) then
+                        f2(i,j) = 0.5d0*g*h(i+1,j)**2.d0
+                    else
+                        f2(i,j) = 0.d0
+                    end if
+                    f3(i,j) = 0.d0
+                    f4(i,j) = 0.d0
+                else if ( obs(i,j)==1 .and. obs(i+1,j)==1 ) then
+                    f1(i,j) = 0.d0
+                    f2(i,j) = 0.d0
+                    f3(i,j) = 0.d0
+                    f4(i,j) = 0.d0
+                end if
+            end do
+        end do
+
+end subroutine
+
+subroutine obstacley(f1,f2,f3,f4,obs,h,hmin,g,nx,ny)
+    implicit none
+    integer, intent(in) :: nx, ny
+    integer, dimension(0:nx,0:ny), intent(in) :: obs
+    double precision, intent(in) :: g, hmin
+    double precision, dimension(0:nx,0:ny), intent(in) :: h
+    double precision, dimension(0:nx,0:ny), intent(inout) :: f1, f2, f3, f4
+    
+    integer :: i, j
+
+!$omp do
+        do j=1,ny-2
+            do i=1,nx-1
+!                if( obs(i,j)==0 .and. obs(i,j+1)==1 .and. h(i,j)>hmin ) then
+                if( obs(i,j)==0 .and. obs(i,j+1)==1 ) then
+                    f1(i,j) = 0.d0
+                    f2(i,j) = 0.d0
+                    if( h(i,j)>hmin ) then
+                        f3(i,j) = 0.5d0*g*h(i,j)**2.d0
+                    else
+                        f3(i,j) = 0.d0
+                    end if
+                    f4(i,j) = 0.d0
+!                else if ( obs(i,j)==1 .and. obs(i,j+1)==0 .and. h(i,j+1)>hmin ) then
+                else if ( obs(i,j)==1 .and. obs(i,j+1)==0 ) then
+                    f1(i,j) = 0.d0
+                    f2(i,j) = 0.d0
+                    if( h(i,j+1)>hmin ) then
+                        f3(i,j) = 0.5d0*g*h(i,j+1)**2.d0
+                    else
+                        f3(i,j) = 0.d0
+                    end if
+                    f4(i,j) = 0.d0
+                else if ( obs(i,j)==1 .and. obs(i,j+1)==1 ) then
+                    f1(i,j) = 0.d0
+                    f2(i,j) = 0.d0
+                    f3(i,j) = 0.d0
+                    f4(i,j) = 0.d0
+                end if
+            end do
+        end do
 
 end subroutine
 
@@ -1009,6 +1240,8 @@ subroutine boundary(h,qx,qy,z,dz,dis,wid,snm,ib,dy,nx,ny)
         h(nx,j) = h(nx-1,j)
 
         qx( 0,j) = dis/wid*rp
+!        qx( 0,j) = -qx(1,j)
+!        qx(nx,j) = -qx(nx-1,j)
         qx(nx,j) = qx(nx-1,j)
 
         qy( 0,j) = qy(   1,j)
@@ -1132,7 +1365,8 @@ subroutine out2txt(x,y,z,h,u,v,z0,nx,ny,fpout,tt)
 
         do j=0,ny
             do i=0,nx
-                write(101,*) x(i,j), y(i,j), z(i,j)-z0(i,j)
+!                write(101,*) x(i,j), y(i,j), z(i,j)-z0(i,j)
+                write(101,'(4f15.7)') x(i,j), y(i,j), z(i,j), h(i,j)
             end do
         end do
 			
@@ -1167,6 +1401,7 @@ program SWE_HLL
     implicit none 
     integer :: i, j, nx, ny, m, ii, iomp
     integer :: cal_t1,cal_t2,t_rate,t_max,t_diff
+    integer, dimension(:,:), allocatable :: obs
     double precision :: dx, dy, dt, rdx, rdy, ct, dt1, dt2, hmin
     double precision :: g, nu, dis, chlen, wid, snm, ib, spec, diam, poro, tuk, etime, bedtime, ib2, z00
     double precision :: h0, hmax, tt, optime, ss, cl, cr, ust, cst
@@ -1174,8 +1409,9 @@ program SWE_HLL
     double precision :: tsc, tau, vv, dzdx, dzdy, dzdn, qbs, qbn, uc, vc, hc, frc, mu_s, sigl, sigr, pi, wdz
     double precision :: wsl1, wsc1, wsr1, wsl2, wsc2, wsr2
     double precision :: dql, dqc, dqr, ucc, cc, phi, epsilon, wdq
-    double precision :: mf, ctm, dtm, sm, dum
-    double precision, dimension(:,:), allocatable :: x, y, z, wz, z0, dz, h, wh, u, v, qx, wqx, qy, wqy, sr, sl, sc
+    double precision :: mf, ctm, dtm, sm, dum, dtmin
+    double precision, dimension(:,:), allocatable :: x, y, z, wz, z0, dz, h, wh, u, v, qx, wqx, qy, wqy
+    double precision, dimension(:,:), allocatable :: sr, sl, sc, wsrx, wslx, wscx, wsry, wsly, wscy
     double precision, dimension(:,:), allocatable :: f1, f2, f3, ffx, ffy, qbsta, ffxz, ffyz
     double precision, dimension(:,:), allocatable :: qbx, qby, qbx1, qby1, qbx2, qby2, f4
     double precision, dimension(:,:), allocatable :: qsta, fsta, dh, qbtsc
@@ -1186,18 +1422,20 @@ program SWE_HLL
     pi = 3.14159d0
     epsilon = 1e-9
 
-!    dis     = 0.01035d0     ! water discharge (m3/s)
-    dis = 0.0064
+    dis     = 0.01035d0     ! water discharge (m3/s)
+!    dis     = 0.d0
     chlen   = 120.d0        ! channel length (m)
     wid     = 0.9d0         ! channel width (m)
-!    ib      = 0.0125d0      ! bed slope
-    ib      = 0.005d0      ! bed slope
+    ib      = 0.0125d0      ! bed slope
+!    ib      = 0.d0      ! bed slope
     spec    = 1.65d0        ! specific weight of sediment in fluid
     diam    = 0.00076d0     ! sediment diameter (m)
     poro    = 0.4d0         ! porosity of bed
     mu_s    = 0.7d0         ! dynamic friction coefficinet of sediment
-    hmin    = 0.0001d0      ! minimun water depth (m)
-    mf = 1.d0               ! morphological acceleration factor
+    hmin    = diam      ! minimun water depth (m)
+    mf      = 1.d0               ! morphological acceleration factor
+
+    dtmin = 0.1d0
 
     call CriticalShieldsIwagaki(diam,tsc,spec,nu,g)
     snm = (2.5d0*diam)**(1.d0/6.d0)/(7.66d0*dsqrt(g))
@@ -1214,9 +1452,9 @@ program SWE_HLL
     rdx = 1.d0/dx
     rdy = 1.d0/dy
     
-    tuk   = 600.    !/mf             ! output time interval (sec)
-    bedtime = 60.           ! start time for morphological change of bed
-    etime = tuk*500.        ! end time of calculation
+    tuk   = 60.d0    !/mf             ! output time interval (sec)
+    bedtime = 0.           ! start time for morphological change of bed
+    etime = tuk*900.        ! end time of calculation
 
     iomp = 8                ! number of cores for OpenMP parallelization
 
@@ -1228,6 +1466,8 @@ program SWE_HLL
     allocate( qbx(0:nx,0:ny), qby(0:nx,0:ny), qbx1(0:nx,0:ny), qby1(0:nx,0:ny), qbx2(0:nx,0:ny), qby2(0:nx,0:ny), f4(0:nx,0:ny) )
     allocate( qsta(0:nx,0:ny), fsta(0:nx,0:ny), dh(0:nx,0:ny) )
     allocate( ffxz(0:nx,0:ny), ffyz(0:nx,0:ny), qbtsc(0:nx,0:ny) )
+    allocate( wsrx(0:nx,0:ny), wslx(0:nx,0:ny), wscx(0:nx,0:ny), wsry(0:nx,0:ny), wsly(0:nx,0:ny), wscy(0:nx,0:ny) )
+    allocate( obs(0:nx,0:ny) )
 
         ! grid generation. just straight, rectangler grid
 
@@ -1244,16 +1484,30 @@ program SWE_HLL
             y(i,j) = y(i,j-1)+dy
         end do
     end do
-       
+    
     z00  = chlen*ib     ! bed elevation at upstream end
-
+  
     do j=0,ny
         z(0,j) = z00
         do i=1,nx
             z(i,j) = z(i-1,j)-ib*dx
+        end do
+    end do
+
+    do j=0,ny
+        do i=0,nx
             h(i,j) = (snm*dis/(wid*ib**0.5))**0.6
             qx(i,j) = dis/wid
             qy(i,j) = 0.d0
+        end do
+    end do
+
+    dt = ct*dx/dsqrt(g*h(0.5*nx,0.5*ny))
+!    dt = ct*dx/dsqrt(g*hmin)
+
+    do j=0,ny
+        do i=0,nx
+            obs(i,j) = 0
         end do
     end do
     
@@ -1312,27 +1566,32 @@ program SWE_HLL
 
             !  x direction 
 
-        call fluxcalx(ffx,ffy,qbx1,qbx2,u,v,wh,wz,wqx,wqy,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
+!$omp do
+        do j=0,ny
+            do i=0,nx
+                if( wh(i,j)>hmin ) then
+                    u(i,j) = wqx(i,j)/wh(i,j)
+                    v(i,j) = wqy(i,j)/wh(i,j)
+                else
+                    u(i,j) = 0.d0
+                    v(i,j) = 0.d0
+                end if
+            end do                
+        end do
+        
+!$omp do private(i,j)
+        do j=1,ny
+            do i=0,nx
+                call propagation(wslx(i,j),wscx(i,j),wsrx(i,j),u(i,j),v(i,j),wh(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
+                call propagation(wsly(i,j),wscy(i,j),wsry(i,j),v(i,j),u(i,j),wh(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
+            end do
+        end do
+
+        call fluxcalx(ffx,ffy,qbx1,qbx2,u,v,wh,wz,wqx,wqy,obs,wslx,wscx,wsrx,wsly,wscy,wsry,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
 
             ! wave speed calculation at i+1/2
 
-!$omp do private(i,j,wsl1,wsc1,wsr1,wsl2,wsc2,wsr2,uc,vc,hc)
-        do j=1,ny-1
-            do i=0,nx-1
-                call propagation(wsl1, wsc1, wsr1,u(i,j),v(i,j),wh(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
-                call propagation(wsl2, wsc2, wsr2,u(i+1,j),v(i+1,j),wh(i+1,j),g,snm,spec,diam,tsc,poro,hmin,mf)
-
-                sl(i,j) = min(wsl1,wsl2)
-                sr(i,j) = max(wsr1,wsr2)
-                
-                if( dabs(wsc1)>dabs(wsc2) ) then
-                    sc(i,j) = wsc1
-                else
-                    sc(i,j) = wsc2
-                end if
-
-            end do
-        end do
+        call wavespeedx(sl,sc,sr,wslx,wscx,wsrx,obs,wh,hmin,nx,ny)
 
 !$omp single
         dt1 = 999.d0
@@ -1345,8 +1604,10 @@ program SWE_HLL
 
             !  HLL solver for estimating flux at star region
 
-        call hllx1storder(f1,wqx,sl,sr,wh,nx,ny)
+        call hllx1storder(f1,wqx,sl,sr,wh+wz,nx,ny)
         call hllx1storder(f2,ffx,sl,sr,wqx,nx,ny)
+
+            !  Simple HLLC solver for tangential component (y-direction momentum)
 
 !$omp do private(i,j,hc,ust,dqc,dql,dqr,cc,phi,ucc,wdq)
         do j=1,ny-1
@@ -1362,30 +1623,37 @@ program SWE_HLL
 
         call hllzx1storder(f4,qbx1,sl,sc,sr,wz,u,v,snm,dx,wqx,wh,nx,ny)
 
-        call systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx2,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt,nx,ny)
+        call obstaclex(f1,f2,f3,f4,obs,wh,hmin,g,nx,ny)
+
+        call systemx(h,wh,qx,wqx,qy,wqy,z,wz,f1,f2,f3,f4,qbx2,qbtsc,u,v,sr,sc,sl,dz,obs,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt,nx,ny)
 
         call boundary(h,qx,qy,z,dz,dis,wid,snm,ib,dy,nx,ny)
 
             ! y direction for dt
-
-        call fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
+!$omp do
+        do j=0,ny
+            do i=0,nx
+                if( h(i,j)>hmin ) then
+                    u(i,j) = qx(i,j)/h(i,j)
+                    v(i,j) = qy(i,j)/h(i,j)
+                else
+                    u(i,j) = 0.d0
+                    v(i,j) = 0.d0
+                end if
+            end do                
+        end do
         
-!$omp do private(i,j,wsl1,wsc1,wsr1,wsl2,wsc2,wsr2,uc,vc,hc)
+!$omp do private(i,j)
         do j=0,ny-1
             do i=1,nx-1
-                call propagation(wsl1, wsc1, wsr1,v(i,j),u(i,j),h(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
-                call propagation(wsl2, wsc2, wsr2,v(i,j+1),u(i,j+1),h(i,j+1),g,snm,spec,diam,tsc,poro,hmin,mf)
-
-                sl(i,j) = min(wsl1,wsl2)
-                sr(i,j) = max(wsr1,wsr2)
-                
-                if( dabs(wsc1)>dabs(wsc2) ) then
-                    sc(i,j) = wsc1
-                else
-                    sc(i,j) = wsc2
-                end if
+                call propagation(wsly(i,j),wscy(i,j),wsry(i,j),v(i,j),u(i,j),h(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
+                call propagation(wslx(i,j),wscx(i,j),wsrx(i,j),u(i,j),v(i,j),h(i,j),g,snm,spec,diam,tsc,poro,hmin,mf)
             end do
         end do
+
+        call fluxcaly(ffx,ffy,qby1,qby2,u,v,h,z,qx,qy,obs,wslx,wscx,wsrx,wsly,wscy,wsry,snm,spec,diam,mu_s,tsc,poro,hmin,g,mf,rdx,rdy,nx,ny)
+
+        call wavespeedy(sl,sc,sr,wsly,wscy,wsry,obs,h,hmin,nx,ny)
 
 !$omp single
         dt2 = 999.d0
@@ -1396,7 +1664,7 @@ program SWE_HLL
         end do
 !$omp end single
 
-        call hlly1storder(f1,qy,sl,sr,h,nx,ny)
+        call hlly1storder(f1,qy,sl,sr,h+z,nx,ny)
         call hlly1storder(f3,ffy,sl,sr,qy,nx,ny)
 
 !$omp single
@@ -1406,6 +1674,7 @@ program SWE_HLL
         end do
 !$omp end single
 
+            !  Simple HLLC solver for tangential component (x-direction momentum)
         
 !$omp do private(i,j,hc,ust,dqc,dql,dqr,cc,phi,ucc,wdq)
         do j=0,ny-1
@@ -1421,7 +1690,9 @@ program SWE_HLL
 
         call hllzy1storder(f4,qby1,sl,sc,sr,z,u,v,h,nx,ny)
         
-        call systemy(wh,h,wqx,qx,wqy,qy,wz,z,f1,f2,f3,f4,qby2,qbtsc,u,v,sr,sc,sl,dz,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt,nx,ny)
+        call obstacley(f1,f2,f3,f4,obs,h,hmin,g,nx,ny)
+        
+        call systemy(wh,h,wqx,qx,wqy,qy,wz,z,f1,f2,f3,f4,qby2,qbtsc,u,v,sr,sc,sl,dz,obs,snm,g,poro,hmin,mf,tt,bedtime,rdx,rdy,dt,nx,ny)
 
         call boundary(wh,wqx,wqy,wz,dz,dis,wid,snm,ib,dy,nx,ny)
 
